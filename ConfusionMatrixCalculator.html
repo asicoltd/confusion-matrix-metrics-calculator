@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Confusion Matrix Calculator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    table {
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th, td {
+      padding: 15px;
+      text-align: center;
+      border: 1px solid #444;
+      font-size: 18px;
+      cursor: pointer;
+      min-width: 80px;
+    }
+    input[type="number"] {
+      width: 60px;
+      text-align: center;
+    }
+    #results {
+      font-size: 16px;
+      white-space: pre-wrap;
+      background: #f7f7f7;
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Confusion Matrix Size</h2>
+<label for="matrixSize">Enter Matrix Size (n x n): </label>
+<input type="number" id="matrixSize" value="2" min="2" max="10">
+<button onclick="generateMatrix()">Generate Matrix</button>
+
+<h2>Confusion Matrix Input</h2>
+<div id="matrixContainer"></div>
+
+<h3>Results:</h3>
+<div id="results">Enter size and values for the matrix to see calculations...</div>
+
+<script>
+function generateMatrix() {
+  const size = parseInt(document.getElementById("matrixSize").value);
+  const container = document.getElementById("matrixContainer");
+  container.innerHTML = "";
+
+  let table = document.createElement("table");
+  let headerRow = document.createElement("tr");
+  let corner = document.createElement("th");
+  headerRow.appendChild(corner);
+  for (let i = 0; i < size; i++) {
+    let th = document.createElement("th");
+    th.innerText = `Predicted ${i}`;
+    headerRow.appendChild(th);
+  }
+  table.appendChild(headerRow);
+
+  for (let i = 0; i < size; i++) {
+    let row = document.createElement("tr");
+    let th = document.createElement("th");
+    th.innerText = `Actual ${i}`;
+    row.appendChild(th);
+
+    for (let j = 0; j < size; j++) {
+      let td = document.createElement("td");
+      td.contentEditable = true;
+      td.dataset.role = `cell-${i}-${j}`;
+      td.innerText = "0";
+      td.addEventListener("input", updateMatrixMetrics);
+      row.appendChild(td);
+    }
+    table.appendChild(row);
+  }
+
+  container.appendChild(table);
+  updateMatrixMetrics();
+}
+
+function updateMatrixMetrics() {
+  const size = parseInt(document.getElementById("matrixSize").value);
+  const matrix = Array.from({ length: size }, () => Array(size).fill(0));
+  let total = 0;
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      const cell = document.querySelector(`[data-role="cell-${i}-${j}"]`);
+      const val = parseInt(cell.innerText.trim()) || 0;
+      matrix[i][j] = val;
+      total += val;
+    }
+  }
+
+  let resultText = `Confusion Matrix (${size}x${size}):\n\n`;
+  resultText += matrix.map(row => row.join("\t")).join("\n") + "\n\n";
+
+  let actualTotals = matrix.map(row => row.reduce((a, b) => a + b, 0));
+  let predictedTotals = matrix[0].map((_, colIndex) => matrix.reduce((sum, row) => sum + row[colIndex], 0));
+
+  resultText += `Total Data Points = ${total}\n`;
+  resultText += `Total Actual Positives per Class: ${actualTotals.join(", ")}\n`;
+  resultText += `Total Predicted Positives per Class: ${predictedTotals.join(", ")}\n`;
+  resultText += `Total Actual Negatives per Class: ${actualTotals.map((_, i) => total - actualTotals[i]).join(", ")}\n`;
+  resultText += `Total Predicted Negatives per Class: ${predictedTotals.map((_, i) => total - predictedTotals[i]).join(", ")}\n\n`;
+
+  let overallTP = 0;
+  let overallFP = 0;
+  let overallFN = 0;
+  let overallTN = 0;
+
+  for (let c = 0; c < size; c++) {
+    let TP = matrix[c][c];
+    let FN = matrix[c].reduce((sum, val, idx) => idx !== c ? sum + val : sum, 0);
+    let FP = matrix.reduce((sum, row, idx) => idx !== c ? sum + row[c] : sum, 0);
+    let TN = total - TP - FP - FN;
+
+    overallTP += TP;
+    overallFP += FP;
+    overallFN += FN;
+    overallTN += TN;
+
+    const precision = TP / (TP + FP || 1);
+    const recall = TP / (TP + FN || 1);
+    const f1 = 2 * (precision * recall) / (precision + recall || 1);
+    const specificity = TN / (TN + FP || 1);
+    const accuracy = (TP + TN) / total;
+    const npv = TN / (TN + FN || 1);
+    const fpr = FP / (FP + TN || 1);
+    const fnr = FN / (FN + TP || 1);
+
+    resultText += `Class ${c} Metrics:\n` +
+      `TP = ${TP}, TN = ${TN}, FP = ${FP}, FN = ${FN}\n` +
+      `Precision (Positive Predictive Value) = ${TP} / (${TP} + ${FP}) = ${precision.toFixed(4)}\n` +
+      `Recall (Sensitivity / TPR) = ${TP} / (${TP} + ${FN}) = ${recall.toFixed(4)}\n` +
+      `Specificity (TNR) = ${TN} / (${TN} + ${FP}) = ${specificity.toFixed(4)}\n` +
+      `Accuracy = (${TP} + ${TN}) / ${total} = ${accuracy.toFixed(4)}\n` +
+      `NPV (Negative Predictive Value) = ${TN} / (${TN} + ${FN}) = ${npv.toFixed(4)}\n` +
+      `F1 Score = 2 * (${precision.toFixed(4)} * ${recall.toFixed(4)}) / (${precision.toFixed(4)} + ${recall.toFixed(4)}) = ${f1.toFixed(4)}\n` +
+      `FPR (False Positive Rate) = ${FP} / (${FP} + ${TN}) = ${fpr.toFixed(4)}\n` +
+      `FNR (False Negative Rate) = ${FN} / (${FN} + ${TP}) = ${fnr.toFixed(4)}\n\n`;
+  }
+
+  const macroPrecision = overallTP / (overallTP + overallFP || 1);
+  const macroRecall = overallTP / (overallTP + overallFN || 1);
+  const macroF1 = 2 * (macroPrecision * macroRecall) / (macroPrecision + macroRecall || 1);
+  const macroSpecificity = overallTN / (overallTN + overallFP || 1);
+  const macroAccuracy = (overallTP + overallTN) / total;
+
+  resultText += `Overall Metrics:\n` +
+    `Macro Precision = ${macroPrecision.toFixed(4)}\n` +
+    `Macro Recall = ${macroRecall.toFixed(4)}\n` +
+    `Macro F1 Score = ${macroF1.toFixed(4)}\n` +
+    `Macro Specificity = ${macroSpecificity.toFixed(4)}\n` +
+    `Macro Accuracy = ${macroAccuracy.toFixed(4)}\n`;
+
+  document.getElementById("results").innerText = resultText;
+}
+</script>
+
+</body>
+</html>
