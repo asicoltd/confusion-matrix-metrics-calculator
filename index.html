@@ -40,9 +40,9 @@
 <input type="number" id="matrixSize" value="2" min="2" max="10">
 <button onclick="generateMatrix()">Generate Matrix</button>
 
-<h2>Confusion Matrix Input</h2>
 <div id="matrixContainer"></div>
-
+<label for="betaScore">Enter Value of Beta (for Beta Score) : </label>
+<input type="number" id="betaScore" value="2">
 <h3>Results:</h3>
 <div id="results">Enter size and values for the matrix to see calculations...</div>
 
@@ -52,13 +52,21 @@ function generateMatrix() {
   const container = document.getElementById("matrixContainer");
   container.innerHTML = "";
 
+  const label = (i, type) => {
+    if (size === 2) {
+      const binaryLabels = ["Negative", "Positive"];
+      return type === "Predicted" ? `Predicted ${binaryLabels[i]}` : `Actual ${binaryLabels[i]}`;
+    }
+    return `${type} ${i}`;
+  };
+
   let table = document.createElement("table");
   let headerRow = document.createElement("tr");
   let corner = document.createElement("th");
   headerRow.appendChild(corner);
   for (let i = 0; i < size; i++) {
     let th = document.createElement("th");
-    th.innerText = `Predicted ${i}`;
+    th.innerText = label(i, "Predicted");
     headerRow.appendChild(th);
   }
   table.appendChild(headerRow);
@@ -66,7 +74,7 @@ function generateMatrix() {
   for (let i = 0; i < size; i++) {
     let row = document.createElement("tr");
     let th = document.createElement("th");
-    th.innerText = `Actual ${i}`;
+    th.innerText = label(i, "Actual");
     row.appendChild(th);
 
     for (let j = 0; j < size; j++) {
@@ -88,6 +96,7 @@ function updateMatrixMetrics() {
   const size = parseInt(document.getElementById("matrixSize").value);
   const matrix = Array.from({ length: size }, () => Array(size).fill(0));
   let total = 0;
+
   for (let i = 0; i < size; i++) {
     for (let j = 0; j < size; j++) {
       const cell = document.querySelector(`[data-role="cell-${i}-${j}"]`);
@@ -100,8 +109,8 @@ function updateMatrixMetrics() {
   let resultText = `Confusion Matrix (${size}x${size}):\n\n`;
   resultText += matrix.map(row => row.join("\t")).join("\n") + "\n\n";
 
-  let actualTotals = matrix.map(row => row.reduce((a, b) => a + b, 0));
-  let predictedTotals = matrix[0].map((_, colIndex) => matrix.reduce((sum, row) => sum + row[colIndex], 0));
+  const actualTotals = matrix.map(row => row.reduce((a, b) => a + b, 0));
+  const predictedTotals = matrix[0].map((_, colIndex) => matrix.reduce((sum, row) => sum + row[colIndex], 0));
 
   resultText += `Total Data Points = ${total}\n`;
   resultText += `Total Actual Positives per Class: ${actualTotals.join(", ")}\n`;
@@ -109,17 +118,13 @@ function updateMatrixMetrics() {
   resultText += `Total Actual Negatives per Class: ${actualTotals.map((_, i) => total - actualTotals[i]).join(", ")}\n`;
   resultText += `Total Predicted Negatives per Class: ${predictedTotals.map((_, i) => total - predictedTotals[i]).join(", ")}\n\n`;
 
-  let overallTP = 0;
-  let overallFP = 0;
-  let overallFN = 0;
-  let overallTN = 0;
+  let overallTP = 0, overallFP = 0, overallFN = 0, overallTN = 0;
 
   for (let c = 0; c < size; c++) {
-    let TP = matrix[c][c];
-    let FN = matrix[c].reduce((sum, val, idx) => idx !== c ? sum + val : sum, 0);
-    let FP = matrix.reduce((sum, row, idx) => idx !== c ? sum + row[c] : sum, 0);
-    let TN = total - TP - FP - FN;
-
+    const TP = matrix[c][c];
+    const FN = matrix[c].reduce((sum, val, idx) => idx !== c ? sum + val : sum, 0);
+    const FP = matrix.reduce((sum, row, idx) => idx !== c ? sum + row[c] : sum, 0);
+    const TN = total - TP - FP - FN;
     overallTP += TP;
     overallFP += FP;
     overallFN += FN;
@@ -128,38 +133,60 @@ function updateMatrixMetrics() {
     const precision = TP / (TP + FP || 1);
     const recall = TP / (TP + FN || 1);
     const f1 = 2 * (precision * recall) / (precision + recall || 1);
+    const beta = parseInt(document.getElementById("betaScore").value);
+    const fbetaNumerator = (1 + beta ** 2) * precision * recall;
+    const fbetaDenominator = (beta ** 2 * precision) + recall || 1;
+    const fbeta = fbetaNumerator / fbetaDenominator;
     const specificity = TN / (TN + FP || 1);
     const accuracy = (TP + TN) / total;
     const npv = TN / (TN + FN || 1);
     const fpr = FP / (FP + TN || 1);
     const fnr = FN / (FN + TP || 1);
+    if (size != 2){
+    resultText += `Class ${c} Metrics:\n`;
+    resultText += `TP = ${TP}, TN = ${TN}, FP = ${FP}, FN = ${FN}\n`;
+    resultText += `Precision (PPV) = ${TP} / (${TP} + ${FP}) = ${precision.toFixed(2)}\n`;
+    resultText += `Recall (Sensitivity) = ${TP} / (${TP} + ${FN}) = ${recall.toFixed(2)}\n`;
+    resultText += `Specificity (TNR) = ${TN} / (${TN} + ${FP}) = ${specificity.toFixed(2)}\n`;
+    resultText += `Accuracy = (${TP} + ${TN}) / ${total} = ${accuracy.toFixed(2)}\n`;
+    resultText += `NPV = ${TN} / (${TN} + ${FN}) = ${npv.toFixed(2)}\n`;
+    resultText += `F1 Score = 2 * (${precision.toFixed(2)} * ${recall.toFixed(2)}) / (${precision.toFixed(2)} + ${recall.toFixed(2)}) = ${f1.toFixed(2)}\n`;
+    resultText += `F${beta} Score = (${(1 + beta ** 2)} * ${precision.toFixed(2)} * ${recall.toFixed(2)}) / (${(beta ** 2).toFixed(2)} * ${precision.toFixed(2)} + ${recall.toFixed(2)}) = ${fbeta.toFixed(2)}\n`;
+    resultText += `FPR = ${FP} / (${FP} + ${TN}) = ${fpr.toFixed(2)}\n`;
+    resultText += `FNR = ${FN} / (${FN} + ${TP}) = ${fnr.toFixed(2)}\n\n`;
+    const macroPrecision = overallTP / (overallTP + overallFP || 1);
+    const macroRecall = overallTP / (overallTP + overallFN || 1);
+    const macroF1 = 2 * (macroPrecision * macroRecall) / (macroPrecision + macroRecall || 1);
+    const macroSpecificity = overallTN / (overallTN + overallFP || 1);
+    const macroAccuracy = (overallTP + overallTN) / total;
 
-    resultText += `Class ${c} Metrics:\n` +
-      `TP = ${TP}, TN = ${TN}, FP = ${FP}, FN = ${FN}\n` +
-      `Precision (Positive Predictive Value) = ${TP} / (${TP} + ${FP}) = ${precision.toFixed(4)}\n` +
-      `Recall (Sensitivity / TPR) = ${TP} / (${TP} + ${FN}) = ${recall.toFixed(4)}\n` +
-      `Specificity (TNR) = ${TN} / (${TN} + ${FP}) = ${specificity.toFixed(4)}\n` +
-      `Accuracy = (${TP} + ${TN}) / ${total} = ${accuracy.toFixed(4)}\n` +
-      `NPV (Negative Predictive Value) = ${TN} / (${TN} + ${FN}) = ${npv.toFixed(4)}\n` +
-      `F1 Score = 2 * (${precision.toFixed(4)} * ${recall.toFixed(4)}) / (${precision.toFixed(4)} + ${recall.toFixed(4)}) = ${f1.toFixed(4)}\n` +
-      `FPR (False Positive Rate) = ${FP} / (${FP} + ${TN}) = ${fpr.toFixed(4)}\n` +
-      `FNR (False Negative Rate) = ${FN} / (${FN} + ${TP}) = ${fnr.toFixed(4)}\n\n`;
+    resultText += `Overall Metrics:\n`;
+    resultText += `Macro Precision = ${macroPrecision.toFixed(2)}\n`;
+    resultText += `Macro Recall = ${macroRecall.toFixed(2)}\n`;
+    resultText += `Macro F1 Score = ${macroF1.toFixed(2)}\n`;
+    resultText += `Macro Specificity = ${macroSpecificity.toFixed(2)}\n`;
+    resultText += `Macro Accuracy = ${macroAccuracy.toFixed(2)}\n`;
+
+    
+    }
+    else{
+        c = 1;
+    resultText += `Results:\n`;
+    resultText += `TP = ${TP}, TN = ${TN}, FP = ${FP}, FN = ${FN}\n`;
+    resultText += `Precision (PPV) = ${TP} / (${TP} + ${FP}) = ${precision.toFixed(2)}\n`;
+    resultText += `Recall (Sensitivity) = ${TP} / (${TP} + ${FN}) = ${recall.toFixed(2)}\n`;
+    resultText += `Specificity (TNR) = ${TN} / (${TN} + ${FP}) = ${specificity.toFixed(2)}\n`;
+    resultText += `Accuracy = (${TP} + ${TN}) / ${total} = ${accuracy.toFixed(2)}\n`;
+    resultText += `NPV = ${TN} / (${TN} + ${FN}) = ${npv.toFixed(2)}\n`;
+    resultText += `F1 Score = 2 * (${precision.toFixed(2)} * ${recall.toFixed(2)}) / (${precision.toFixed(2)} + ${recall.toFixed(2)}) = ${f1.toFixed(2)}\n`;
+    resultText += `F${beta} Score = (${(1 + beta ** 2)} * ${precision.toFixed(2)} * ${recall.toFixed(2)}) / (${(beta ** 2).toFixed(2)} * ${precision.toFixed(2)} + ${recall.toFixed(2)}) = ${fbeta.toFixed(2)}\n`;
+    resultText += `FPR = ${FP} / (${FP} + ${TN}) = ${fpr.toFixed(2)}\n`;
+    resultText += `FNR = ${FN} / (${FN} + ${TP}) = ${fnr.toFixed(2)}\n\n`;
+    }
+    document.getElementById("results").innerText = resultText;
   }
 
-  const macroPrecision = overallTP / (overallTP + overallFP || 1);
-  const macroRecall = overallTP / (overallTP + overallFN || 1);
-  const macroF1 = 2 * (macroPrecision * macroRecall) / (macroPrecision + macroRecall || 1);
-  const macroSpecificity = overallTN / (overallTN + overallFP || 1);
-  const macroAccuracy = (overallTP + overallTN) / total;
 
-  resultText += `Overall Metrics:\n` +
-    `Macro Precision = ${macroPrecision.toFixed(4)}\n` +
-    `Macro Recall = ${macroRecall.toFixed(4)}\n` +
-    `Macro F1 Score = ${macroF1.toFixed(4)}\n` +
-    `Macro Specificity = ${macroSpecificity.toFixed(4)}\n` +
-    `Macro Accuracy = ${macroAccuracy.toFixed(4)}\n`;
-
-  document.getElementById("results").innerText = resultText;
 }
 </script>
 
